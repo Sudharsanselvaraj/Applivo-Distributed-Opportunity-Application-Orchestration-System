@@ -20,10 +20,14 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    # bcrypt has a maximum password length of 72 bytes
+    # Truncate if necessary
+    return pwd_context.hash(password[:72])
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    # bcrypt has a maximum password length of 72 bytes
+    # Truncate if necessary
+    return pwd_context.verify(plain[:72], hashed)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
@@ -69,9 +73,41 @@ async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
     db.add(user)
     await db.flush()
     from app.models.user import UserProfile
-    db.add(UserProfile(user_id=user.id))
+    # Sync settings from .env to UserProfile for agent automation
+    profile = UserProfile(
+        user_id=user.id,
+        # Auto apply settings from .env
+        auto_apply_enabled=settings.AUTO_APPLY_ENABLED,
+        auto_apply_threshold=settings.AUTO_APPLY_MATCH_THRESHOLD,
+        auto_apply_daily_limit=settings.AUTO_APPLY_DAILY_LIMIT,
+        require_apply_approval=settings.AUTO_APPLY_REQUIRE_APPROVAL,
+        # User info from .env
+        phone=settings.USER_PHONE,
+        location=settings.USER_LOCATION,
+        # Notification settings - enable Telegram by default if token exists
+        notify_via_telegram=bool(settings.TELEGRAM_BOT_TOKEN),
+        notify_via_email=bool(settings.SMTP_USERNAME),
+        notification_email=settings.USER_EMAIL or settings.SMTP_USERNAME,
+    )
+    db.add(profile)
     await db.commit()
     await db.refresh(user)
+    
+    # Send welcome notification
+    try:
+        from app.services.notification_service import NotificationService
+        notif_service = NotificationService()
+        await notif_service.notify(
+            title="Welcome to AI Career Platform! 🎉",
+            body=f"Hi {payload.full_name}!\n\nWelcome to your AI-powered career assistant. Here's what you can do:\n\n• Set up your profile with skills & experience\n• Upload your resume for AI-powered tailoring\n• Connect platform credentials for auto-apply\n• Let AI find and apply to jobs for you\n\nGet started at: /dashboard\n\nBest,\nThe AI Career Team",
+            event_type="user_welcome"
+        )
+    except Exception as e:
+        # Log but don't fail registration if notification fails
+        import structlog
+        logger = structlog.get_logger()
+        logger.warning("Welcome notification failed", error=str(e))
+    
     return user
 
 @router.post("/token", response_model=TokenResponse)

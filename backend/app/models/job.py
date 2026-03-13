@@ -17,6 +17,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     Float,
+    ForeignKey,
     Integer,
     String,
     Text,
@@ -161,7 +162,7 @@ class JobAnalysis(Base, UUIDMixin, TimestampMixin):
     """
     __tablename__ = "job_analyses"
 
-    job_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id"), nullable=False, unique=True, index=True)
 
     # ── Extracted Skills ──────────────────────────────────────
     required_skills: Mapped[List[str]] = mapped_column(JSON, default=list)

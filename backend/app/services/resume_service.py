@@ -24,7 +24,10 @@ from app.models.user import User, UserProfile, UserSkill
 from app.models.application import Application
 
 logger = structlog.get_logger()
-client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+client = AsyncOpenAI(
+    api_key=settings.OPENAI_API_KEY,
+    base_url="https://api.groq.com/openai/v1",
+)
 
 RESUME_TAILORING_PROMPT = """
 You are an expert resume writer and ATS optimization specialist.
@@ -116,7 +119,7 @@ class ResumeService:
                         {"role": "system", "content": RESUME_TAILORING_PROMPT},
                         {"role": "user", "content": f"BASE RESUME:\n{profile_context}\n\nTARGET JOB:\n{job_context}"},
                     ],
-                    response_format={"type": "json_object"},
+                
                 )
                 tailored_data = json.loads(response.choices[0].message.content)
                 tokens_used = response.usage.total_tokens

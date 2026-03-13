@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     SCRAPE_DELAY_MAX_SECONDS: float = 6.0
     LINKEDIN_EMAIL: str = ""
     LINKEDIN_PASSWORD: str = ""
+    INTERNShALA_EMAIL: str = ""
+    INTERNShALA_PASSWORD: str = ""
+    INDEED_EMAIL: str = ""
+    INDEED_PASSWORD: str = ""
     AUTO_APPLY_ENABLED: bool = False
     AUTO_APPLY_MATCH_THRESHOLD: int = 75
     AUTO_APPLY_DAILY_LIMIT: int = 10
@@ -68,6 +72,7 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "changeme-jwt-secret-at-least-32-characters-long"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    ENCRYPTION_KEY: str = ""
 
     @property
     def storage_path(self) -> Path:

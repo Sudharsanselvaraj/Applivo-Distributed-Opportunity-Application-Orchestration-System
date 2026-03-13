@@ -21,7 +21,7 @@ from app.core.database import get_db
 from app.api.routes.auth import get_current_user
 from app.models.user import User
 from app.models.application import Application, ApplicationEvent, ApplicationStatus
-from app.models.job import Job
+from app.models.job import Job, JobAnalysis
 from app.schemas import (
     ApplicationCreate, ApplicationOut, ApplicationStatusUpdate,
     ApplicationStats, MessageResponse, PaginatedResponse
@@ -369,6 +369,28 @@ async def set_default_resume(
     await db.commit()
     await db.refresh(resume)
     return resume
+
+
+@resumes_router.get("/latex", response_model=dict)
+async def generate_latex_resume(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a LaTeX resume for Overleaf."""
+    from app.services.overleaf_service import OverleafService
+    result = await OverleafService().generate_latex_resume(current_user.id)
+    return result
+
+
+@resumes_router.get("/analyze", response_model=dict)
+async def analyze_all_resumes(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Analyze all resumes in the user's profile."""
+    from app.services.overleaf_service import OverleafService
+    result = await OverleafService().analyze_all_resumes(current_user.id)
+    return result
 
 
 async def _trigger_resume_generation(user_id: str, job_id: str, base_resume_id: Optional[str]):

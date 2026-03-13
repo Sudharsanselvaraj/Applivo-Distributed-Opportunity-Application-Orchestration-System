@@ -17,6 +17,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     Float,
+    ForeignKey,
     Integer,
     String,
     Text,
@@ -63,6 +64,12 @@ class User(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     skills: Mapped[List["UserSkill"]] = relationship(
         "UserSkill", back_populates="user", cascade="all, delete-orphan"
     )
+    credentials: Mapped[List["CredentialVault"]] = relationship(
+        "CredentialVault", back_populates="user", cascade="all, delete-orphan"
+    )
+    consents: Mapped[List["UserConsent"]] = relationship(
+        "UserConsent", back_populates="user", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email={self.email}>"
@@ -75,7 +82,7 @@ class UserProfile(Base, UUIDMixin, TimestampMixin):
     """
     __tablename__ = "user_profiles"
 
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, unique=True, index=True)
 
     # ── Contact Info ──────────────────────────────────────────
     phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
@@ -155,7 +162,7 @@ class UserSkill(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "user_skills"
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_skill"),)
 
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # e.g. "programming", "ml_framework", "cloud", "tool", "soft_skill"

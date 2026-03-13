@@ -54,7 +54,15 @@ class NotificationService:
 
             user_id = profile.user_id
 
-            if profile.notify_via_telegram and settings.TELEGRAM_BOT_TOKEN:
+            # Use profile settings with global settings as fallback for notifications
+            notify_telegram = (
+                (profile.notify_via_telegram if profile else False) or bool(settings.TELEGRAM_BOT_TOKEN)
+            )
+            notify_email = (
+                (profile.notify_via_email if profile else False) or bool(settings.SMTP_USERNAME)
+            )
+
+            if notify_telegram and settings.TELEGRAM_BOT_TOKEN:
                 tg_notif = Notification(
                     user_id=user_id,
                     channel="telegram",
@@ -68,7 +76,7 @@ class NotificationService:
                 await db.flush()
                 await self._send_telegram(tg_notif, db)
 
-            if profile.notify_via_email and settings.SMTP_USERNAME:
+            if notify_email and settings.SMTP_USERNAME:
                 to_email = profile.notification_email or settings.SMTP_USERNAME
                 email_notif = Notification(
                     user_id=user_id,

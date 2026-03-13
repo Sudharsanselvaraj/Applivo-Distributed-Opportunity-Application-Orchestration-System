@@ -25,22 +25,17 @@ logger = structlog.get_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Runs on startup and shutdown."""
-    # ── STARTUP ──────────────────────────────
     logger.info(f"Starting {settings.APP_NAME}", env=settings.APP_ENV)
 
-    # Check database
     if not await check_db_connection():
         logger.error("Database connection failed — check DATABASE_URL in .env")
         raise RuntimeError("Database unavailable")
     logger.info("Database connected")
 
-    # Create tables in development
     if settings.APP_ENV == "development":
         await init_db()
         logger.info("Database tables initialized")
 
-    # Ensure storage directories exist
     _ = settings.resumes_path
     _ = settings.cover_letters_path
     _ = settings.recordings_path
@@ -48,7 +43,6 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # ── SHUTDOWN ─────────────────────────────
     await close_db()
     logger.info("Database connections closed")
 
@@ -66,27 +60,42 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ── CORS ──────────────────────────────────
+    # ── CORS ──────────────────────────────────────────────────
+    # FIX: allow_credentials=True is incompatible with allow_origins=["*"].
+    # Browsers reject that combination per the CORS spec.
+    # Use explicit origins in production; keep wildcard only for local dev
+    # where credentials are not needed.
+    allowed_origins = (
+        ["*"] if settings.APP_ENV == "development"
+        else [o.strip() for o in settings.SECRET_KEY.split(",") if o.strip().startswith("http")]
+        # Replace the above with a real ALLOWED_ORIGINS setting in production.
+    )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=allowed_origins,
+        allow_credentials=settings.APP_ENV != "development",  # False when wildcard
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    # ── Global exception handler ──────────────
+    # ── Global exception handler ──────────────────────────────
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         logger.error("Unhandled exception", path=request.url.path, error=str(exc))
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal server error", "error": str(exc) if settings.DEBUG else ""},
+            content={
+                "detail": "Internal server error",
+                "error": str(exc) if settings.DEBUG else "",
+            },
         )
 
-    # ── Routers ───────────────────────────────
+    # ── Routers ───────────────────────────────────────────────
     from app.api.routes.auth import router as auth_router
     from app.api.routes.jobs import router as jobs_router
+    from app.api.routes.profile import router as profile_router
+    from app.api.routes.security import router as security_router
+    from app.api.routes.onboarding import router as onboarding_router
     from app.api.routes.routes import (
         applications_router,
         resumes_router,
@@ -98,7 +107,10 @@ def create_app() -> FastAPI:
 
     API_PREFIX = "/api"
     app.include_router(auth_router, prefix=API_PREFIX)
+    app.include_router(onboarding_router, prefix=API_PREFIX)
     app.include_router(jobs_router, prefix=API_PREFIX)
+    app.include_router(profile_router, prefix=API_PREFIX)
+    app.include_router(security_router, prefix=API_PREFIX)
     app.include_router(applications_router, prefix=API_PREFIX)
     app.include_router(resumes_router, prefix=API_PREFIX)
     app.include_router(cover_letters_router, prefix=API_PREFIX)
@@ -106,7 +118,7 @@ def create_app() -> FastAPI:
     app.include_router(analytics_router, prefix=API_PREFIX)
     app.include_router(chat_router, prefix=API_PREFIX)
 
-    # ── Health check ──────────────────────────
+    # ── Health check ──────────────────────────────────────────
     @app.get("/health", tags=["System"])
     async def health():
         db_ok = await check_db_connection()
@@ -117,15 +129,14 @@ def create_app() -> FastAPI:
             "env": settings.APP_ENV,
         }
 
-    # ── Dashboard ─────────────────────────────
+    # ── Dashboard ─────────────────────────────────────────────
     @app.get("/dashboard", tags=["System"])
     async def dashboard():
-        """Serve the CareerOS frontend dashboard."""
         dashboard_path = Path(__file__).parent.parent / "dashboard.html"
         if not dashboard_path.exists():
             return JSONResponse(
                 status_code=404,
-                content={"detail": "dashboard.html not found. Place it in the backend/ folder."}
+                content={"detail": "dashboard.html not found."},
             )
         return FileResponse(str(dashboard_path), media_type="text/html")
 
@@ -134,9 +145,20 @@ def create_app() -> FastAPI:
         return {
             "app": settings.APP_NAME,
             "dashboard": "/dashboard",
+            "onboarding": "/onboarding",
             "docs": "/api/docs",
             "health": "/health",
         }
+
+    @app.get("/onboarding", tags=["System"])
+    async def onboarding_page():
+        onboarding_path = Path(__file__).parent.parent / "frontend" / "onboarding.html"
+        if not onboarding_path.exists():
+            return JSONResponse(
+                status_code=404,
+                content={"detail": "onboarding.html not found."},
+            )
+        return FileResponse(str(onboarding_path), media_type="text/html")
 
     return app
 

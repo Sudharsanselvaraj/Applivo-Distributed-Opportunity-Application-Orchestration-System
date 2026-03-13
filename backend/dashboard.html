@@ -150,7 +150,7 @@ function LoginScreen({ onLogin }) {
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function Dashboard({ stats }) {
   if (!stats) return <Spinner />;
-  const a = stats.applications;
+  const a = stats.applications || { total_sent:0, interviews:0, offers:0, response_rate:0, interview_rate:0, pending_approval:0, applied:0, viewed:0, shortlisted:0, rejected:0 };
   return (
     <div className="page">
       <div className="page-header">
@@ -702,7 +702,14 @@ function ChatPage() {
     } finally{setLoading(false);}
   };
 
-  const SUGGESTIONS=["Find AI internships in Europe","What's my application response rate?","Which skills should I learn next?","Apply to top 3 matching jobs"];
+  const SUGGESTIONS=[
+    "Hey, how are you?",
+    "What can you help me with?",
+    "Find AI internships in Europe",
+    "What's my application response rate?",
+    "Tell me a joke",
+    "Apply to top 3 matching jobs"
+  ];
 
   return (
     <div className="page" style={{height:"calc(100vh - 20px)",display:"flex",flexDirection:"column"}}>
@@ -711,6 +718,13 @@ function ChatPage() {
       </div>
       <div className="chat-container" style={{flex:1}}>
         <div className="chat-messages">
+          {!loading && messages.length === 0 && (
+            <div style={{textAlign:'center',padding:'40px 20px',color:'var(--muted)'}}>
+              <div style={{fontSize:'48px',marginBottom:'16px'}}>👋</div>
+              <div style={{fontSize:'18px',color:'var(--text)',marginBottom:'8px'}}>Hey! I'm your AI Career Assistant</div>
+              <div style={{fontSize:'13px'}}>Ask me anything - your jobs, applications, career advice, or just chat!</div>
+            </div>
+          )}
           {messages.map((m,i)=>(
             <div key={i} className={`chat-msg ${m.role}`}>
               <div className="chat-bubble">
@@ -730,19 +744,658 @@ function ChatPage() {
           )}
           <div ref={bottomRef} />
         </div>
-        {messages.length===1&&(
-          <div className="suggestions">
-            {SUGGESTIONS.map(s=>(
-              <button key={s} className="suggestion-btn" onClick={()=>setInput(s)}>{s}</button>
-            ))}
-          </div>
-        )}
         <div className="chat-input-row">
-          <input className="input" placeholder="Ask anything about your career…" value={input}
+          <input className="input" placeholder="Ask me anything… (career, jobs, or just chat)" value={input}
             onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} />
           <button className="btn-primary" onClick={send} disabled={loading||!input.trim()}>Send</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── PROFILE ───────────────────────────────────────────────────────────────────
+function ProfilePage() {
+  const [profile,setProfile]=useState(null);
+  const [skills,setSkills]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [msg,setMsg]=useState("");
+  const [activeSection,setActiveSection]=useState("personal");
+
+  // Form states
+  const [personal,setPersonal]=useState({
+    phone:"", location:"", linkedin_url:"", github_url:"", portfolio_url:"", professional_summary:""
+  });
+  const [newSkill,setNewSkill]=useState({name:"", category:"", proficiency:"intermediate", years_experience:null, is_primary:false});
+  const [showSkillForm,setShowSkillForm]=useState(false);
+
+  // Experience states
+  const [experiences,setExperiences]=useState([]);
+  const [showExpForm,setShowExpForm]=useState(false);
+  const [editingExp,setEditingExp]=useState(null);
+  const [expForm,setExpForm]=useState({title:"", company:"", start_date:"", end_date:"", description:"", current:false});
+
+  // Projects states
+  const [projects,setProjects]=useState([]);
+  const [showProjForm,setShowProjForm]=useState(false);
+  const [editingProj,setEditingProj]=useState(null);
+  const [projForm,setProjForm]=useState({name:"", description:"", tech_stack:"", github_url:"", demo_url:""});
+
+  // Education states
+  const [education,setEducation]=useState([]);
+  const [showEduForm,setShowEduForm]=useState(false);
+  const [editingEdu,setEditingEdu]=useState(null);
+  const [eduForm,setEduForm]=useState({degree:"", field:"", institution:"", year:"", gpa:""});
+
+  const loadProfile=async()=>{
+    setLoading(true);
+    try {
+      const [p,s]=await Promise.all([apiFetch("/api/profile"),apiFetch("/api/profile/skills")]);
+      setProfile(p);
+      setSkills(s||[]);
+      setPersonal({
+        phone:p.phone||"",
+        location:p.location||"",
+        linkedin_url:p.linkedin_url||"",
+        github_url:p.github_url||"",
+        portfolio_url:p.portfolio_url||"",
+        professional_summary:p.professional_summary||""
+      });
+      setExperiences(p.work_experience||[]);
+      setProjects(p.projects||[]);
+      setEducation(p.education||[]);
+    } catch(e){
+      setMsg(e.message);
+    } finally{
+      setLoading(false);
+    }
+  };
+
+  useEffect(()=>{loadProfile();},[]);
+
+  const savePersonal=async()=>{
+    try {
+      await apiFetch("/api/profile",{method:"PATCH",body:JSON.stringify(personal)});
+      setMsg("✓ Profile saved!"); setTimeout(()=>setMsg(""),2000);
+    } catch(e){setMsg(e.message);}
+  };
+
+  const addSkill=async()=>{
+    if(!newSkill.name.trim()) return;
+    try {
+      const skill=await apiFetch("/api/profile/skills",{method:"POST",body:JSON.stringify({
+        name:newSkill.name,
+        category:newSkill.category||null,
+        proficiency:newSkill.proficiency,
+        years_experience:newSkill.years_experience?parseFloat(newSkill.years_experience):null,
+        is_primary:newSkill.is_primary
+      })});
+      setSkills([...skills,skill]);
+      setNewSkill({name:"", category:"", proficiency:"intermediate", years_experience:null, is_primary:false});
+      setShowSkillForm(false);
+      setMsg("✓ Skill added!"); setTimeout(()=>setMsg(""),2000);
+    } catch(e){setMsg(e.message);}
+  };
+
+  const removeSkill=async(id)=>{
+    try {
+      await apiFetch(`/api/profile/skills/${id}`,{method:"DELETE"});
+      setSkills(skills.filter(s=>s.id!==id));
+      setMsg("✓ Skill removed"); setTimeout(()=>setMsg(""),2000);
+    } catch(e){setMsg(e.message);}
+  };
+
+  const saveExperiences=async()=>{
+    try {
+      await apiFetch("/api/profile",{method:"PATCH",body:JSON.stringify({work_experience:experiences})});
+      setMsg("✓ Experience saved!"); setTimeout(()=>setMsg(""),2000);
+    } catch(e){setMsg(e.message);}
+  };
+
+  const addExperience=()=>{
+    const exp={...expForm,start_date:expForm.start_date,end_date:expForm.current?null:expForm.end_date};
+    if(editingExp!==null){
+      const updated=[...experiences];
+      updated[editingExp]=exp;
+      setExperiences(updated);
+      setEditingExp(null);
+    }else{
+      setExperiences([...experiences,exp]);
+    }
+    setExpForm({title:"", company:"", start_date:"", end_date:"", description:"", current:false});
+    setShowExpForm(false);
+  };
+
+  const editExperience=(idx)=>{
+    const e=experiences[idx];
+    setExpForm({title:e.title||"", company:e.company||"", start_date:e.start_date||"", end_date:e.end_date||"", description:e.description||"", current:!e.end_date});
+    setEditingExp(idx);
+    setShowExpForm(true);
+  };
+
+  const deleteExperience=(idx)=>{
+    setExperiences(experiences.filter((_,i)=>i!==idx));
+  };
+
+  const saveProjects=async()=>{
+    try {
+      await apiFetch("/api/profile",{method:"PATCH",body:JSON.stringify({projects:projects})});
+      setMsg("✓ Projects saved!"); setTimeout(()=>setMsg(""),2000);
+    } catch(e){setMsg(e.message);}
+  };
+
+  const addProject=()=>{
+    const proj={...projForm,tech_stack:projForm.tech_stack.split(",").map(t=>t.trim()).filter(t=>t)};
+    if(editingProj!==null){
+      const updated=[...projects];
+      updated[editingProj]=proj;
+      setProjects(updated);
+      setEditingProj(null);
+    }else{
+      setProjects([...projects,proj]);
+    }
+    setProjForm({name:"", description:"", tech_stack:"", github_url:"", demo_url:""});
+    setShowProjForm(false);
+  };
+
+  const editProject=(idx)=>{
+    const p=projects[idx];
+    setProjForm({name:p.name||"", description:p.description||"", tech_stack:p.tech_stack?p.tech_stack.join(", "):"", github_url:p.github_url||"", demo_url:p.demo_url||""});
+    setEditingProj(idx);
+    setShowProjForm(true);
+  };
+
+  const deleteProject=(idx)=>{
+    setProjects(projects.filter((_,i)=>i!==idx));
+  };
+
+  const saveEducation=async()=>{
+    try {
+      await apiFetch("/api/profile",{method:"PATCH",body:JSON.stringify({education:education})});
+      setMsg("✓ Education saved!"); setTimeout(()=>setMsg(""),2000);
+    } catch(e){setMsg(e.message);}
+  };
+
+  const addEducation=()=>{
+    const edu={degree:eduForm.degree, field:eduForm.field, institution:eduForm.institution, year:eduForm.year?parseInt(eduForm.year):null, gpa:eduForm.gpa?parseFloat(eduForm.gpa):null};
+    if(editingEdu!==null){
+      const updated=[...education];
+      updated[editingEdu]=edu;
+      setEducation(updated);
+      setEditingEdu(null);
+    }else{
+      setEducation([...education,edu]);
+    }
+    setEduForm({degree:"", field:"", institution:"", year:"", gpa:""});
+    setShowEduForm(false);
+  };
+
+  const editEducation=(idx)=>{
+    const e=education[idx];
+    setEduForm({degree:e.degree||"", field:e.field||"", institution:e.institution||"", year:e.year?String(e.year):"", gpa:e.gpa?String(e.gpa):""});
+    setEditingEdu(idx);
+    setShowEduForm(true);
+  };
+
+  const deleteEducation=(idx)=>{
+    setEducation(education.filter((_,i)=>i!==idx));
+  };
+
+  const SECTIONS=[
+    {key:"personal",icon:"👤",label:"Personal Details"},
+    {key:"skills",icon:"⚡",label:"Skills"},
+    {key:"experience",icon:"💼",label:"Experience"},
+    {key:"projects",icon:"🚀",label:"Projects"},
+    {key:"education",icon:"🎓",label:"Education"}
+  ];
+
+  const SKILL_CATEGORIES=["programming","frameworks","tools","cloud","databases","soft_skills","other"];
+  const PROFICIENCY_LEVELS=["beginner","intermediate","advanced","expert"];
+
+  if(loading) return <Spinner />;
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div><h1 className="page-title">Profile</h1><p className="page-sub">Manage your career information</p></div>
+      </div>
+      {msg&&<div className="toast">{msg}</div>}
+      <div className="profile-layout">
+        <div className="profile-nav">
+          {SECTIONS.map(s=>(
+            <button key={s.key} className={`profile-nav-item ${activeSection===s.key?"active":""}`} onClick={()=>setActiveSection(s.key)}>
+              <span>{s.icon}</span> <span>{s.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="profile-content">
+          {/* Personal Details */}
+          {activeSection==="personal"&&(
+            <div className="card">
+              <SectionHeader icon="👤" title="Personal Details" action={<button className="btn-primary" onClick={savePersonal}>Save Changes</button>} />
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label">Phone</label>
+                  <input className="input" placeholder="+1 234 567 8900" value={personal.phone} onChange={e=>setPersonal({...personal,phone:e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Location</label>
+                  <input className="input" placeholder="San Francisco, CA" value={personal.location} onChange={e=>setPersonal({...personal,location:e.target.value})} />
+                </div>
+                <div className="form-group full">
+                  <label className="form-label">LinkedIn URL</label>
+                  <input className="input" placeholder="https://linkedin.com/in/yourprofile" value={personal.linkedin_url} onChange={e=>setPersonal({...personal,linkedin_url:e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">GitHub URL</label>
+                  <input className="input" placeholder="https://github.com/yourusername" value={personal.github_url} onChange={e=>setPersonal({...personal,github_url:e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Portfolio URL</label>
+                  <input className="input" placeholder="https://yourportfolio.com" value={personal.portfolio_url} onChange={e=>setPersonal({...personal,portfolio_url:e.target.value})} />
+                </div>
+                <div className="form-group full">
+                  <label className="form-label">Professional Summary</label>
+                  <textarea className="input" rows={4} placeholder="Write a brief summary about yourself, your experience, and career goals…" value={personal.professional_summary} onChange={e=>setPersonal({...personal,professional_summary:e.target.value})} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Skills */}
+          {activeSection==="skills"&&(
+            <div className="card">
+              <SectionHeader icon="⚡" title="Skills" action={<button className="btn-primary" onClick={()=>setShowSkillForm(true)}>+ Add Skill</button>} />
+              {showSkillForm&&(
+                <div className="inline-form">
+                  <input className="input" placeholder="Skill name (e.g., Python)" value={newSkill.name} onChange={e=>setNewSkill({...newSkill,name:e.target.value})} style={{flex:1}} />
+                  <select className="select" value={newSkill.category} onChange={e=>setNewSkill({...newSkill,category:e.target.value})}>
+                    <option value="">Category</option>
+                    {SKILL_CATEGORIES.map(c=><option key={c} value={c}>{c.replace("_"," ")}</option>)}
+                  </select>
+                  <select className="select" value={newSkill.proficiency} onChange={e=>setNewSkill({...newSkill,proficiency:e.target.value})}>
+                    {PROFICIENCY_LEVELS.map(p=><option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <input className="input" type="number" placeholder="Years" style={{width:80}} value={newSkill.years_experience||""} onChange={e=>setNewSkill({...newSkill,years_experience:e.target.value})} />
+                  <label style={{display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
+                    <input type="checkbox" checked={newSkill.is_primary} onChange={e=>setNewSkill({...newSkill,is_primary:e.target.checked})} /> Primary
+                  </label>
+                  <button className="btn-primary" onClick={addSkill}>Add</button>
+                  <button className="btn-ghost" onClick={()=>{setShowSkillForm(false);setNewSkill({name:"", category:"", proficiency:"intermediate", years_experience:null, is_primary:false})}}>Cancel</button>
+                </div>
+              )}
+              <div className="skills-grid">
+                {skills.length===0&&<div className="empty">No skills added yet. Click "+ Add Skill" to get started.</div>}
+                {skills.map(skill=>(
+                  <div key={skill.id} className={`skill-card ${skill.is_primary?"primary":""}`}>
+                    <div className="skill-header">
+                      <span className="skill-name">{skill.name}</span>
+                      {skill.is_primary&&<Badge color="#ffd700">Primary</Badge>}
+                    </div>
+                    <div className="skill-meta">
+                      {skill.category&&<span className="skill-category">{skill.category}</span>}
+                      <span className="skill-proficiency">{skill.proficiency}</span>
+                      {skill.years_experience&&<span className="skill-years">{skill.years_experience} yrs</span>}
+                    </div>
+                    <button className="skill-remove" onClick={()=>removeSkill(skill.id)}>×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Experience */}
+          {activeSection==="experience"&&(
+            <div className="card">
+              <SectionHeader icon="💼" title="Work Experience" action={<><button className="btn-primary" onClick={()=>setShowExpForm(true)}>+ Add Experience</button><button className="btn-ghost" onClick={saveExperiences} style={{marginLeft:8}}>Save</button></>} />
+              {showExpForm&&(
+                <div className="modal-form">
+                  <input className="input" placeholder="Job Title" value={expForm.title} onChange={e=>setExpForm({...expForm,title:e.target.value})} />
+                  <input className="input" placeholder="Company" value={expForm.company} onChange={e=>setExpForm({...expForm,company:e.target.value})} />
+                  <div className="form-row">
+                    <input className="input" type="month" placeholder="Start Date" value={expForm.start_date} onChange={e=>setExpForm({...expForm,start_date:e.target.value})} />
+                    <input className="input" type="month" placeholder="End Date" value={expForm.end_date} onChange={e=>setExpForm({...expForm,end_date:e.target.value})} disabled={expForm.current} />
+                    <label style={{display:"flex",alignItems:"center",gap:4}}><input type="checkbox" checked={expForm.current} onChange={e=>setExpForm({...expForm,current:e.target.checked})} /> Currently working here</label>
+                  </div>
+                  <textarea className="input" rows={3} placeholder="Description (bullets)" value={expForm.description} onChange={e=>setExpForm({...expForm,description:e.target.value})} />
+                  <div className="form-actions">
+                    <button className="btn-primary" onClick={addExperience}>{editingExp!==null?"Update":"Add"}</button>
+                    <button className="btn-ghost" onClick={()=>{setShowExpForm(false);setEditingExp(null);setExpForm({title:"", company:"", start_date:"", end_date:"", description:"", current:false})}}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              <div className="entries-list">
+                {experiences.length===0&&<div className="empty">No work experience added yet.</div>}
+                {experiences.map((exp,i)=>(
+                  <div key={i} className="entry-card">
+                    <div className="entry-header">
+                      <div className="entry-title">{exp.title}</div>
+                      <div className="entry-actions">
+                        <button className="btn-xs" onClick={()=>editExperience(i)}>Edit</button>
+                        <button className="btn-xs danger" onClick={()=>deleteExperience(i)}>Delete</button>
+                      </div>
+                    </div>
+                    <div className="entry-company">{exp.company}</div>
+                    <div className="entry-dates">{exp.start_date} — {exp.current?"Present":exp.end_date}</div>
+                    {exp.description&&<div className="entry-desc">{exp.description}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Projects */}
+          {activeSection==="projects"&&(
+            <div className="card">
+              <SectionHeader icon="🚀" title="Projects" action={<><button className="btn-primary" onClick={()=>setShowProjForm(true)}>+ Add Project</button><button className="btn-ghost" onClick={saveProjects} style={{marginLeft:8}}>Save</button></>} />
+              {showProjForm&&(
+                <div className="modal-form">
+                  <input className="input" placeholder="Project Name" value={projForm.name} onChange={e=>setProjForm({...projForm,name:e.target.value})} />
+                  <textarea className="input" rows={2} placeholder="Description" value={projForm.description} onChange={e=>setProjForm({...projForm,description:e.target.value})} />
+                  <input className="input" placeholder="Tech Stack (comma separated)" value={projForm.tech_stack} onChange={e=>setProjForm({...projForm,tech_stack:e.target.value})} />
+                  <input className="input" placeholder="GitHub URL" value={projForm.github_url} onChange={e=>setProjForm({...projForm,github_url:e.target.value})} />
+                  <input className="input" placeholder="Demo URL" value={projForm.demo_url} onChange={e=>setProjForm({...projForm,demo_url:e.target.value})} />
+                  <div className="form-actions">
+                    <button className="btn-primary" onClick={addProject}>{editingProj!==null?"Update":"Add"}</button>
+                    <button className="btn-ghost" onClick={()=>{setShowProjForm(false);setEditingProj(null);setProjForm({name:"", description:"", tech_stack:"", github_url:"", demo_url:""})}}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              <div className="entries-list">
+                {projects.length===0&&<div className="empty">No projects added yet.</div>}
+                {projects.map((proj,i)=>(
+                  <div key={i} className="entry-card">
+                    <div className="entry-header">
+                      <div className="entry-title">{proj.name}</div>
+                      <div className="entry-actions">
+                        <button className="btn-xs" onClick={()=>editProject(i)}>Edit</button>
+                        <button className="btn-xs danger" onClick={()=>deleteProject(i)}>Delete</button>
+                      </div>
+                    </div>
+                    {proj.description&&<div className="entry-desc">{proj.description}</div>}
+                    {proj.tech_stack?.length>0&&<div className="entry-tags">{proj.tech_stack.map(t=><Badge key={t} color="#00d4ff">{t}</Badge>)}</div>}
+                    <div className="entry-links">
+                      {proj.github_url&&<a href={proj.github_url} target="_blank" rel="noopener">GitHub</a>}
+                      {proj.demo_url&&<a href={proj.demo_url} target="_blank" rel="noopener">Demo</a>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Education */}
+          {activeSection==="education"&&(
+            <div className="card">
+              <SectionHeader icon="🎓" title="Education" action={<><button className="btn-primary" onClick={()=>setShowEduForm(true)}>+ Add Education</button><button className="btn-ghost" onClick={saveEducation} style={{marginLeft:8}}>Save</button></>} />
+              {showEduForm&&(
+                <div className="modal-form">
+                  <input className="input" placeholder="Degree (e.g., B.Tech, M.S.)" value={eduForm.degree} onChange={e=>setEduForm({...eduForm,degree:e.target.value})} />
+                  <input className="input" placeholder="Field of Study (e.g., Computer Science)" value={eduForm.field} onChange={e=>setEduForm({...eduForm,field:e.target.value})} />
+                  <input className="input" placeholder="Institution" value={eduForm.institution} onChange={e=>setEduForm({...eduForm,institution:e.target.value})} />
+                  <div className="form-row">
+                    <input className="input" type="number" placeholder="Year" value={eduForm.year} onChange={e=>setEduForm({...eduForm,year:e.target.value})} />
+                    <input className="input" type="number" step="0.1" placeholder="GPA" value={eduForm.gpa} onChange={e=>setEduForm({...eduForm,gpa:e.target.value})} />
+                  </div>
+                  <div className="form-actions">
+                    <button className="btn-primary" onClick={addEducation}>{editingEdu!==null?"Update":"Add"}</button>
+                    <button className="btn-ghost" onClick={()=>{setShowEduForm(false);setEditingEdu(null);setEduForm({degree:"", field:"", institution:"", year:"", gpa:""})}}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              <div className="entries-list">
+                {education.length===0&&<div className="empty">No education added yet.</div>}
+                {education.map((edu,i)=>(
+                  <div key={i} className="entry-card">
+                    <div className="entry-header">
+                      <div className="entry-title">{edu.degree} in {edu.field}</div>
+                      <div className="entry-actions">
+                        <button className="btn-xs" onClick={()=>editEducation(i)}>Edit</button>
+                        <button className="btn-xs danger" onClick={()=>deleteEducation(i)}>Delete</button>
+                      </div>
+                    </div>
+                    <div className="entry-company">{edu.institution}</div>
+                    <div className="entry-dates">{edu.year}{edu.gpa&&` • GPA: ${edu.gpa}`}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── SECURITY: CREDENTIALS & CONSENTS ───────────────────────────────────────
+function SecurityPage() {
+  const [creds, setCreds] = useState([]);
+  const [consents, setConsents] = useState([]);
+  const [defaults, setDefaults] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState("");
+  const [activeTab, setActiveTab] = useState("credentials");
+  
+  // Credential form
+  const [showCredForm, setShowCredForm] = useState(false);
+  const [credForm, setCredForm] = useState({
+    credential_type: "linkedin", display_name: "", email: "", password: ""
+  });
+  
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [c, cd, defs] = await Promise.all([
+        apiFetch("/api/security/credentials"),
+        apiFetch("/api/security/consents"),
+        apiFetch("/api/security/consents/defaults")
+      ]);
+      setCreds(c);
+      setConsents(cd);
+      setDefaults(defs);
+    } catch(e) { setMsg(e.message); }
+    finally { setLoading(false); }
+  };
+  
+  useEffect(() => { loadData(); }, []);
+  
+  const addCredential = async () => {
+    if (!credForm.email || !credForm.password) {
+      setMsg("Email and password required"); return;
+    }
+    try {
+      await apiFetch("/api/security/credentials", {
+        method: "POST",
+        body: JSON.stringify({
+          credential_type: credForm.credential_type,
+          display_name: credForm.display_name || credForm.credential_type,
+          credentials: { email: credForm.email, password: credForm.password },
+          consent: true
+        })
+      });
+      setMsg("✓ Credential stored securely!");
+      setShowCredForm(false);
+      setCredForm({ credential_type: "linkedin", display_name: "", email: "", password: "" });
+      loadData();
+    } catch(e) { setMsg(e.message); }
+  };
+  
+  const deleteCredential = async (id) => {
+    if (!confirm("Delete this credential?")) return;
+    try {
+      await apiFetch(`/api/security/credentials/${id}`, { method: "DELETE" });
+      setMsg("✓ Credential deleted");
+      loadData();
+    } catch(e) { setMsg(e.message); }
+  };
+  
+  const updateConsent = async (type, scope, granted, purpose) => {
+    try {
+      await apiFetch("/api/security/consents", {
+        method: "POST",
+        body: JSON.stringify({
+          consent_type: type, scope, granted, purpose,
+          data_categories: []
+        })
+      });
+      setMsg(granted ? "✓ Consent granted" : "✓ Consent revoked");
+      loadData();
+    } catch(e) { setMsg(e.message); }
+  };
+  
+  const requestDataExport = async () => {
+    try {
+      await apiFetch("/api/security/data/export", { method: "POST" });
+      setMsg("✓ Export requested - you'll receive an email when ready");
+    } catch(e) { setMsg(e.message); }
+  };
+  
+  const requestDataDelete = async () => {
+    if (!confirm("This will delete all your data. Are you sure?")) return;
+    if (!confirm("This action cannot be undone. Continue?")) return;
+    try {
+      await apiFetch("/api/security/data/delete", { method: "POST" });
+      setMsg("✓ Deletion requested");
+    } catch(e) { setMsg(e.message); }
+  };
+  
+  if (loading) return <Spinner />;
+  
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">🔐 Security & Privacy</h1>
+          <p className="page-sub">Manage your credentials, consents, and data rights</p>
+        </div>
+      </div>
+      
+      {msg && <div className="card" style={{background:"#00ff9d11",borderColor:"#00ff9d44",marginBottom:20}}>{msg}</div>}
+      
+      <div className="tab-row" style={{marginBottom:20}}>
+        <button className={`tab-btn ${activeTab==="credentials"?"active":""}`} onClick={()=>setActiveTab("credentials")}>Platform Credentials</button>
+        <button className={`tab-btn ${activeTab==="consents"?"active":""}`} onClick={()=>setActiveTab("consents")}>Consents</button>
+        <button className={`tab-btn ${activeTab==="data"?"active":""}`} onClick={()=>setActiveTab("data")}>Your Data</button>
+      </div>
+      
+      {activeTab === "credentials" && (
+        <div className="card">
+          <div className="section-header">
+            <h2 className="section-title">Stored Credentials</h2>
+            <button className="btn-primary" onClick={()=>setShowCredForm(true)}>+ Add Credential</button>
+          </div>
+          
+          {showCredForm && (
+            <div className="card" style={{background:"#1a1a24",marginBottom:20}}>
+              <h3 style={{marginBottom:16}}>Add Platform Credential</h3>
+              <div className="two-col">
+                <div>
+                  <label className="field-label">Platform</label>
+                  <select className="field-input" value={credForm.credential_type} onChange={e=>setCredForm({...credForm, credential_type:e.target.value})}>
+                    <option value="linkedin">LinkedIn</option>
+                    <option value="indeed">Indeed</option>
+                    <option value="internshala">Internshala</option>
+                    <option value="wellfound">Wellfound</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">Display Name</label>
+                  <input className="field-input" placeholder="My LinkedIn" value={credForm.display_name} onChange={e=>setCredForm({...credForm, display_name:e.target.value})} />
+                </div>
+              </div>
+              <div className="two-col" style={{marginTop:12}}>
+                <div>
+                  <label className="field-label">Email / Username</label>
+                  <input className="field-input" type="text" value={credForm.email} onChange={e=>setCredForm({...credForm, email:e.target.value})} />
+                </div>
+                <div>
+                  <label className="field-label">Password</label>
+                  <input className="field-input" type="password" value={credForm.password} onChange={e=>setCredForm({...credForm, password:e.target.value})} />
+                </div>
+              </div>
+              <p style={{fontSize:11,color:"#636e72",marginTop:12}}>🔒 Credentials are encrypted with AES-256-GCM before storage</p>
+              <div className="form-actions" style={{marginTop:16}}>
+                <button className="btn-primary" onClick={addCredential}>Store Credential</button>
+                <button className="btn-ghost" onClick={()=>setShowCredForm(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
+          
+          {creds.length === 0 && <div className="empty">No credentials stored. Add a platform to enable auto-apply.</div>}
+          
+          {creds.map(c => (
+            <div key={c.id} className="entry-card">
+              <div className="entry-header">
+                <div className="entry-title">{c.display_name} <Badge color="#00d4ff">{c.credential_type}</Badge></div>
+                <div className="entry-actions">
+                  <button className="btn-xs danger" onClick={()=>deleteCredential(c.id)}>Delete</button>
+                </div>
+              </div>
+              <div className="entry-company">Used {c.use_count} times • {c.consent_given ? "✓ Consent given" : "No consent"}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {activeTab === "consents" && defaults && (
+        <div className="card">
+          <div className="section-header">
+            <h2 className="section-title">Privacy Consents</h2>
+          </div>
+          
+          <p style={{color:"#636e72",marginBottom:20}}>Manage how we use your data. Essential consents are required for the service to work.</p>
+          
+          {defaults.essentials?.map(c => {
+            const current = consents.find(x => x.consent_type === c.type);
+            return (
+              <div key={c.type} className="entry-card" style={{opacity:current?.granted===false?0.5:1}}>
+                <div className="entry-header">
+                  <div className="entry-title">{c.type.replace(/_/g," ")} <Badge color="#ffd700">Required</Badge></div>
+                </div>
+                <div className="entry-company">{c.purpose}</div>
+              </div>
+            );
+          })}
+          
+          {defaults.optional?.map(c => {
+            const current = consents.find(x => x.consent_type === c.type);
+            const granted = current?.granted ?? false;
+            return (
+              <div key={c.type} className="entry-card">
+                <div className="entry-header">
+                  <div className="entry-title">{c.type.replace(/_/g," ")}</div>
+                  <label style={{display:"flex",alignItems:"center",gap:8}}>
+                    <input type="checkbox" checked={granted} onChange={e => updateConsent(c.type, c.scope, e.target.checked, c.purpose)} />
+                    <span>{granted ? "Enabled" : "Disabled"}</span>
+                  </label>
+                </div>
+                <div className="entry-company">{c.purpose}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      
+      {activeTab === "data" && (
+        <div className="card">
+          <div className="section-header">
+            <h2 className="section-title">Your Data Rights (GDPR)</h2>
+          </div>
+          
+          <p style={{color:"#636e72",marginBottom:20}}>You have the right to access, export, and delete your personal data.</p>
+          
+          <div className="task-grid" style={{gridTemplateColumns:"1fr 1fr"}}>
+            <div className="task-card" onClick={requestDataExport}>
+              <div className="task-label">📥 Export My Data</div>
+              <div style={{fontSize:11,color:"#636e72",marginTop:8}}>Download all your data in JSON format</div>
+            </div>
+            <div className="task-card" onClick={requestDataDelete} style={{borderColor:"#ff4757"}}>
+              <div className="task-label" style={{color:"#ff4757"}}>🗑️ Delete My Data</div>
+              <div style={{fontSize:11,color:"#636e72",marginTop:8}}>Permanently delete your account and data</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -771,12 +1424,14 @@ function App() {
 
   const NAV=[
     {key:"dashboard",icon:"◈",label:"Dashboard"},
+    {key:"profile",icon:"👤",label:"Profile"},
     {key:"jobs",icon:"⬡",label:"Jobs"},
     {key:"applications",icon:"◇",label:"Applications"},
     {key:"resumes",icon:"▣",label:"Resumes"},
     {key:"analytics",icon:"◎",label:"Intelligence"},
     {key:"agent",icon:"⬢",label:"Agent"},
     {key:"chat",icon:"◉",label:"AI Chat"},
+    {key:"security",icon:"🔐",label:"Security"},
   ];
 
   if(!authed) return <LoginScreen onLogin={()=>setAuthed(true)} />;
@@ -802,12 +1457,14 @@ function App() {
       </nav>
       <main className="main-content">
         {nav==="dashboard"&&<Dashboard stats={dashData} />}
+        {nav==="profile"&&<ProfilePage />}
         {nav==="jobs"&&<JobsPage />}
         {nav==="applications"&&<ApplicationsPage />}
         {nav==="resumes"&&<ResumesPage />}
         {nav==="analytics"&&<AnalyticsPage />}
         {nav==="agent"&&<AgentPage />}
         {nav==="chat"&&<ChatPage />}
+        {nav==="security"&&<SecurityPage />}
       </main>
     </div>
   );
@@ -923,6 +1580,11 @@ textarea.input { font-family:var(--font-mono); }
 .btn-primary:hover { background:#00ff9ddd; }
 .btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
 .btn-ghost { padding:10px 16px; border-radius:8px; border:1px solid var(--border2); background:transparent; color:var(--muted); font-family:var(--font-mono); font-size:12px; cursor:pointer; transition:all 0.2s; }
+.btn-ghost:hover { background:var(--surface2); color:var(--text); }
+.field-label { display:block; font-size:11px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.05em; }
+.field-input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border2); background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; }
+.field-input:focus { outline:none; border-color:var(--accent); }
+.form-actions { display:flex; gap:10px; margin-top:16px; }
 .btn-ghost:hover { color:var(--text); }
 .btn-ghost.small { padding:6px 12px; font-size:11px; }
 .btn-ghost:disabled { opacity:0.4; cursor:not-allowed; }
@@ -944,6 +1606,54 @@ textarea.input { font-family:var(--font-mono); }
 ::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
 @media(max-width:1100px) { .stats-grid{grid-template-columns:repeat(3,1fr)} .task-grid{grid-template-columns:repeat(2,1fr)} }
 @media(max-width:800px) { .two-col{grid-template-columns:1fr} .sidebar{display:none} }
+
+/* Profile Page */
+.profile-layout { display:flex; gap:24px; }
+.profile-nav { width:220px; flex-shrink:0; display:flex; flex-direction:column; gap:4px; }
+.profile-nav-item { display:flex; align-items:center; gap:10px; padding:12px 16px; border-radius:8px; border:none; background:transparent; color:var(--muted); cursor:pointer; font-family:var(--font-mono); font-size:12px; text-align:left; width:100%; transition:all 0.15s; }
+.profile-nav-item:hover { background:var(--surface2); color:var(--text); }
+.profile-nav-item.active { background:#00ff9d14; color:var(--accent); border:1px solid #00ff9d22; }
+.profile-content { flex:1; }
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.form-group { display:flex; flex-direction:column; gap:6px; }
+.form-group.full { grid-column:1 / -1; }
+.form-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; }
+.form-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.form-actions { display:flex; gap:8px; margin-top:8px; }
+.inline-form { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:16px; background:var(--surface2); border-radius:8px; margin-bottom:16px; }
+.modal-form { display:flex; flex-direction:column; gap:12px; padding:16px; background:var(--surface2); border-radius:8px; margin-bottom:16px; }
+.skills-grid { display:flex; flex-wrap:wrap; gap:10px; }
+.skill-card { position:relative; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px 16px; min-width:140px; }
+.skill-card.primary { border-color:#ffd70044; background:#ffd70010; }
+.skill-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+.skill-name { font-weight:700; font-size:13px; }
+.skill-meta { display:flex; gap:8px; font-size:11px; color:var(--muted); }
+.skill-category { text-transform:capitalize; }
+.skill-proficiency { text-transform:capitalize; }
+.skill-remove { position:absolute; top:4px; right:6px; background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; line-height:1; opacity:0; transition:opacity 0.2s; }
+.skill-card:hover .skill-remove { opacity:1; }
+.skill-remove:hover { color:var(--danger); }
+.entries-list { display:flex; flex-direction:column; gap:12px; }
+.entry-card { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:16px; }
+.entry-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:4px; }
+.entry-title { font-weight:700; font-size:14px; }
+.entry-actions { display:flex; gap:6px; }
+.entry-company { color:var(--text); font-size:13px; margin-bottom:2px; }
+.entry-dates { color:var(--muted); font-size:11px; margin-bottom:8px; }
+.entry-desc { color:var(--text); font-size:12px; line-height:1.5; white-space:pre-wrap; }
+.entry-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.entry-links { display:flex; gap:12px; margin-top:10px; }
+.entry-links a { color:var(--accent); font-size:12px; text-decoration:none; }
+.entry-links a:hover { text-decoration:underline; }
+
+@media(max-width:800px) {
+  .profile-layout { flex-direction:column; }
+  .profile-nav { width:100%; flex-direction:row; overflow-x:auto; gap:8px; padding-bottom:8px; }
+  .profile-nav-item { white-space:nowrap; }
+  .form-grid { grid-template-columns:1fr; }
+  .inline-form { flex-direction:column; align-items:stretch; }
+  .inline-form .input, .inline-form .select { width:100% !important; }
+}
 </style>
 </body>
 </html>

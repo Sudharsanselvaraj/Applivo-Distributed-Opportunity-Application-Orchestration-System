@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onboarding - AI Career Platform</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f; --surface: #111118; --surface2: #1a1a24;
+      --border: #ffffff0f; --text: #e8e8f0; --muted: #636e72;
+      --accent: #00ff9d; --accent2: #00d4ff; --danger: #ff4757;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { margin-bottom: 10px; }
+    .subtitle { color: var(--muted); margin-bottom: 30px; }
+    
+    /* Progress Bar */
+    .progress-container { margin-bottom: 40px; }
+    .progress-bar { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.3s; }
+    .progress-text { display: flex; justify-content: space-between; margin-top: 10px; font-size: 14px; color: var(--muted); }
+    
+    /* Steps */
+    .steps { display: flex; gap: 10px; margin-bottom: 30px; flex-wrap: wrap; }
+    .step { 
+      padding: 10px 20px; background: var(--surface); border: 1px solid var(--border); 
+      border-radius: 8px; cursor: pointer; transition: all 0.2s; font-size: 14px;
+    }
+    .step:hover { border-color: var(--accent); }
+    .step.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+    .step.completed { border-color: var(--accent); color: var(--accent); }
+    
+    /* Form */
+    .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 30px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; margin-bottom: 8px; font-size: 14px; color: var(--muted); }
+    .form-group input, .form-group textarea, .form-group select { 
+      width: 100%; padding: 12px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 14px; font-family: inherit;
+    }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: var(--accent); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .checkbox-group { display: flex; gap: 20px; flex-wrap: wrap; }
+    .checkbox-item { display: flex; align-items: center; gap: 8px; }
+    .checkbox-item input { width: auto; }
+    
+    /* Buttons */
+    .btn { padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
+    .btn-primary { background: var(--accent); color: var(--bg); }
+    .btn-primary:hover { background: #00cc7d; }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); }
+    
+    /* Skills */
+    .skills-list { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px; }
+    .skill-tag { 
+      padding: 6px 12px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 8px;
+    }
+    .skill-tag .remove { cursor: pointer; color: var(--danger); }
+    
+    /* Success */
+    .success { 
+      background: #00ff9d22; border: 1px solid #00ff9d44; padding: 20px; 
+      border-radius: 8px; text-align: center; margin-top: 20px;
+    }
+    .success h3 { color: var(--accent); margin-bottom: 10px; }
+    
+    @media (max-width: 600px) {
+      .form-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const API = "http://127.0.0.1:8000";
+    
+    const getToken = () => localStorage.getItem("careeros_token");
+    
+    async function apiFetch(path, opts = {}) {
+      const token = getToken();
+      const res = await fetch(`${API}${path}`, {
+        ...opts,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `HTTP ${res.status}`);
+      return res.json();
+    }
+
+    const STEPS = [
+      { key: "welcome", label: "👋 Welcome" },
+      { key: "basic_info", label: "📝 Basic Info" },
+      { key: "contact", label: "📞 Contact" },
+      { key: "education", label: "🎓 Education" },
+      { key: "experience", label: "💼 Experience" },
+      { key: "skills", label: "⚡ Skills" },
+      { key: "preferences", label: "🎯 Preferences" },
+      { key: "platform", label: "⚙️ Platform" },
+      { key: "complete", label: "✅ Complete" },
+    ];
+
+    function OnboardingApp() {
+      const [currentStep, setCurrentStep] = useState("welcome");
+      const [progress, setProgress] = useState(0);
+      const [msg, setMsg] = useState("");
+      
+      // Form states
+      const [basicInfo, setBasicInfo] = useState({ full_name: "", professional_summary: "", career_goals: "" });
+      const [contact, setContact] = useState({ phone: "", location: "", linkedin_url: "", github_url: "" });
+      const [education, setEducation] = useState([{ degree: "", field: "", institution: "", year: "" }]);
+      const [experience, setExperience] = useState([{ title: "", company: "", start_date: "", end_date: "", bullets: [""] }]);
+      const [skills, setSkills] = useState([]);
+      const [newSkill, setNewSkill] = useState({ name: "", proficiency: "intermediate" });
+      const [preferences, setPreferences] = useState({ 
+        experience_level: "entry", desired_roles: [], desired_locations: [], 
+        open_to_remote: true, open_to_hybrid: true, min_salary: 50000 
+      });
+      const [platform, setPlatform] = useState({
+        auto_apply_enabled: false, auto_apply_threshold: 75, auto_apply_daily_limit: 10,
+        notify_new_jobs: true, notify_applications: true, notify_interviews: true
+      });
+
+      useEffect(() => {
+        loadStatus();
+      }, []);
+
+      const loadStatus = async () => {
+        try {
+          const status = await apiFetch("/api/v1/onboarding/status");
+          setProgress(status.progress_percentage || 0);
+          if (status.current_step) setCurrentStep(status.current_step);
+        } catch(e) { console.log("Not authenticated or error"); }
+      };
+
+      const saveStep = async (endpoint, data) => {
+        try {
+          await apiFetch(`/api/v1/onboarding/${endpoint}`, { method: "POST", body: JSON.stringify(data) });
+          setMsg("✓ Saved!");
+          loadStatus();
+          setTimeout(() => setMsg(""), 2000);
+        } catch(e) { setMsg("Error: " + e.message); }
+      };
+
+      const addSkill = () => {
+        if (!newSkill.name.trim()) return;
+        setSkills([...skills, { ...newSkill }]);
+        setNewSkill({ name: "", proficiency: "intermediate" });
+      };
+
+      const removeSkill = (idx) => setSkills(skills.filter((_, i) => i !== idx));
+
+      const renderStep = () => {
+        switch(currentStep) {
+          case "welcome":
+            return (
+              <div className="form-card">
+                <h2>👋 Welcome to AI Career Platform!</h2>
+                <p style={{color:"var(--muted)", marginTop:10}}>
+                  Let's set up your profile so our AI can help you find and apply to your dream jobs.
+                  This will take about 5 minutes.
+                </p>
+                <div style={{marginTop:30}}>
+                  <button className="btn btn-primary" onClick={() => setCurrentStep("basic_info")}>
+                    Get Started →
+                  </button>
+                </div>
+              </div>
+            );
+          case "basic_info":
+            return (
+              <div className="form-card">
+                <h2>📝 Basic Information</h2>
+                <div className="form-group">
+                  <label>Full Name</label>
+                  <input value={basicInfo.full_name} onChange={e => setBasicInfo({...basicInfo, full_name: e.target.value})} placeholder="Your full name" />
+                </div>
+                <div className="form-group">
+                  <label>Professional Summary</label>
+                  <textarea value={basicInfo.professional_summary} onChange={e => setBasicInfo({...basicInfo, professional_summary: e.target.value})} placeholder="Brief summary of your background..." rows={4} />
+                </div>
+                <div className="form-group">
+                  <label>Career Goals</label>
+                  <textarea value={basicInfo.career_goals} onChange={e => setBasicInfo({...basicInfo, career_goals: e.target.value})} placeholder="What do you want to achieve?" rows={3} />
+                </div>
+                <button className="btn btn-primary" onClick={() => saveStep("basic-info", basicInfo)}>Save & Continue</button>
+              </div>
+            );
+          case "contact":
+            return (
+              <div className="form-card">
+                <h2>📞 Contact Information</h2>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Phone</label>
+                    <input value={contact.phone} onChange={e => setContact({...contact, phone: e.target.value})} placeholder="+1 234 567 8900" />
+                  </div>
+                  <div className="form-group">
+                    <label>Location</label>
+                    <input value={contact.location} onChange={e => setContact({...contact, location: e.target.value})} placeholder="City, Country" />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>LinkedIn URL</label>
+                  <input value={contact.linkedin_url} onChange={e => setContact({...contact, linkedin_url: e.target.value})} placeholder="https://linkedin.com/in/..." />
+                </div>
+                <div className="form-group">
+                  <label>GitHub URL</label>
+                  <input value={contact.github_url} onChange={e => setContact({...contact, github_url: e.target.value})} placeholder="https://github.com/..." />
+                </div>
+                <button className="btn btn-primary" onClick={() => saveStep("contact-info", contact)}>Save & Continue</button>
+              </div>
+            );
+          case "education":
+            return (
+              <div className="form-card">
+                <h2>🎓 Education</h2>
+                {education.map((edu, i) => (
+                  <div key={i} style={{marginBottom:20, padding:15, background:"var(--surface2)", borderRadius:8}}>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Degree</label>
+                        <input value={edu.degree} onChange={e => { const u=[...education]; u[i].degree=e.target.value; setEducation(u); }} placeholder="B.Tech, M.S., PhD" />
+                      </div>
+                      <div className="form-group">
+                        <label>Field</label>
+                        <input value={edu.field} onChange={e => { const u=[...education]; u[i].field=e.target.value; setEducation(u); }} placeholder="Computer Science" />
+                      </div>
+                    </div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Institution</label>
+                        <input value={edu.institution} onChange={e => { const u=[...education]; u[i].institution=e.target.value; setEducation(u); }} placeholder="University name" />
+                      </div>
+                      <div className="form-group">
+                        <label>Year</label>
+                        <input value={edu.year} onChange={e => { const u=[...education]; u[i].year=e.target.value; setEducation(u); }} placeholder="2024" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <button className="btn btn-secondary" onClick={() => setEducation([...education, {degree:"",field:"",institution:"",year:""}])}>+ Add Education</button>
+                <br/><br/>
+                <button className="btn btn-primary" onClick={() => saveStep("education", {education})}>Save & Continue</button>
+              </div>
+            );
+          case "experience":
+            return (
+              <div className="form-card">
+                <h2>💼 Work Experience</h2>
+                {experience.map((exp, i) => (
+                  <div key={i} style={{marginBottom:20, padding:15, background:"var(--surface2)", borderRadius:8}}>
+                    <div className="form-group">
+                      <label>Job Title</label>
+                      <input value={exp.title} onChange={e => { const u=[...experience]; u[i].title=e.target.value; setExperience(u); }} placeholder="Software Engineer" />
+                    </div>
+                    <div className="form-group">
+                      <label>Company</label>
+                      <input value={exp.company} onChange={e => { const u=[...experience]; u[i].company=e.target.value; setExperience(u); }} placeholder="Company name" />
+                    </div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Start Date</label>
+                        <input value={exp.start_date} onChange={e => { const u=[...experience]; u[i].start_date=e.target.value; setExperience(u); }} placeholder="2023-01" />
+                      </div>
+                      <div className="form-group">
+                        <label>End Date</label>
+                        <input value={exp.end_date} onChange={e => { const u=[...experience]; u[i].end_date=e.target.value; setExperience(u); }} placeholder="2024-01" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <button className="btn btn-secondary" onClick={() => setExperience([...experience, {title:"",company:"",start_date:"",end_date:""}])}>+ Add Experience</button>
+                <br/><br/>
+                <button className="btn btn-primary" onClick={() => saveStep("work-experience", {experience})}>Save & Continue</button>
+              </div>
+            );
+          case "skills":
+            return (
+              <div className="form-card">
+                <h2>⚡ Skills</h2>
+                <p style={{color:"var(--muted)", marginBottom:20}}>Add your technical skills, tools, and technologies you know.</p>
+                <div className="skills-list">
+                  {skills.map((s, i) => (
+                    <span key={i} className="skill-tag">
+                      {s.name} ({s.proficiency})
+                      <span className="remove" onClick={() => removeSkill(i)}>×</span>
+                    </span>
+                  ))}
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <input value={newSkill.name} onChange={e => setNewSkill({...newSkill, name: e.target.value})} placeholder="Skill name (e.g., Python)" />
+                  </div>
+                  <div className="form-group">
+                    <select value={newSkill.proficiency} onChange={e => setNewSkill({...newSkill, proficiency: e.target.value})}>
+                      <option value="beginner">Beginner</option>
+                      <option value="intermediate">Intermediate</option>
+                      <option value="advanced">Advanced</option>
+                      <option value="expert">Expert</option>
+                    </select>
+                  </div>
+                </div>
+                <button className="btn btn-secondary" onClick={addSkill}>+ Add Skill</button>
+                <br/><br/>
+                <button className="btn btn-primary" onClick={() => saveStep("skills", {skills})}>Save & Continue</button>
+              </div>
+            );
+          case "preferences":
+            return (
+              <div className="form-card">
+                <h2>🎯 Job Preferences</h2>
+                <div className="form-group">
+                  <label>Experience Level</label>
+                  <select value={preferences.experience_level} onChange={e => setPreferences({...preferences, experience_level: e.target.value})}>
+                    <option value="entry">Entry Level (0-2 years)</option>
+                    <option value="mid">Mid Level (2-5 years)</option>
+                    <option value="senior">Senior (5+ years)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Desired Roles (comma separated)</label>
+                  <input value={preferences.desired_roles.join(",")} onChange={e => setPreferences({...preferences, desired_roles: e.target.value.split(",").map(s=>s.trim())})} placeholder="Software Engineer, Data Scientist" />
+                </div>
+                <div className="form-group">
+                  <label>Desired Locations</label>
+                  <input value={preferences.desired_locations.join(",")} onChange={e => setPreferences({...preferences, desired_locations: e.target.value.split(",").map(s=>s.trim())})} placeholder="Remote, New York, London" />
+                </div>
+                <div className="form-group">
+                  <label>Minimum Salary ($)</label>
+                  <input type="number" value={preferences.min_salary} onChange={e => setPreferences({...preferences, min_salary: parseInt(e.target.value)})} />
+                </div>
+                <div className="checkbox-group">
+                  <label className="checkbox-item">
+                    <input type="checkbox" checked={preferences.open_to_remote} onChange={e => setPreferences({...preferences, open_to_remote: e.target.checked})} />
+                    Open to Remote
+                  </label>
+                  <label className="checkbox-item">
+                    <input type="checkbox" checked={preferences.open_to_hybrid} onChange={e => setPreferences({...preferences, open_to_hybrid: e.target.checked})} />
+                    Open to Hybrid
+                  </label>
+                </div>
+                <br/>
+                <button className="btn btn-primary" onClick={() => saveStep("job-preferences", preferences)}>Save & Continue</button>
+              </div>
+            );
+          case "platform":
+            return (
+              <div className="form-card">
+                <h2>⚙️ Platform Settings</h2>
+                <div className="form-group">
+                  <label className="checkbox-item">
+                    <input type="checkbox" checked={platform.auto_apply_enabled} onChange={e => setPlatform({...platform, auto_apply_enabled: e.target.checked})} />
+                    Enable Auto-Apply (AI applies to jobs for you)
+                  </label>
+                </div>
+                {platform.auto_apply_enabled && (
+                  <>
+                    <div className="form-group">
+                      <label>Match Threshold: {platform.auto_apply_threshold}%</label>
+                      <input type="range" min="50" max="100" value={platform.auto_apply_threshold} onChange={e => setPlatform({...platform, auto_apply_threshold: parseInt(e.target.value)})} />
+                    </div>
+                    <div className="form-group">
+                      <label>Daily Applications Limit: {platform.auto_apply_daily_limit}</label>
+                      <input type="number" min="1" max="50" value={platform.auto_apply_daily_limit} onChange={e => setPlatform({...platform, auto_apply_daily_limit: parseInt(e.target.value)})} />
+                    </div>
+                  </>
+                )}
+                <h3 style={{marginTop:20}}>Notifications</h3>
+                <div className="checkbox-group" style={{marginTop:10}}>
+                  <label className="checkbox-item">
+                    <input type="checkbox" checked={platform.notify_new_jobs} onChange={e => setPlatform({...platform, notify_new_jobs: e.target.checked})} />
+                    New Job Matches
+                  </label>
+                  <label className="checkbox-item">
+                    <input type="checkbox" checked={platform.notify_applications} onChange={e => setPlatform({...platform, notify_applications: e.target.checked})} />
+                    Application Updates
+                  </label>
+                  <label className="checkbox-item">
+                    <input type="checkbox" checked={platform.notify_interviews} onChange={e => setPlatform({...platform, notify_interviews: e.target.checked})} />
+                    Interview Alerts
+                  </label>
+                </div>
+                <br/>
+                <button className="btn btn-primary" onClick={() => saveStep("platform-setup", platform)}>Save & Complete</button>
+              </div>
+            );
+          case "complete":
+            return (
+              <div className="form-card">
+                <div className="success">
+                  <h3>🎉 You're All Set!</h3>
+                  <p>Your profile is complete. Our AI can now:</p>
+                  <ul style={{textAlign:"left", marginTop:10, color:"var(--muted)"}}>
+                    <li>Answer screening questions based on your profile</li>
+                    <li>Apply to jobs that match your preferences</li>
+                    <li>Monitor your applications for updates</li>
+                    <li>Provide personalized career advice</li>
+                  </ul>
+                  <br/>
+                  <button className="btn btn-primary" onClick={() => window.location.href = "/dashboard"}>
+                    Go to Dashboard →
+                  </button>
+                </div>
+              </div>
+            );
+          default:
+            return <div>Unknown step</div>;
+        }
+      };
+
+      return (
+        <div className="container">
+          <h1>🚀 Setup Your Profile</h1>
+          <p className="subtitle">Complete these steps so AI can help you land your dream job</p>
+          
+          <div className="progress-container">
+            <div className="progress-bar">
+              <div className="progress-fill" style={{width: progress + "%"}}></div>
+            </div>
+            <div className="progress-text">
+              <span>{progress}% Complete</span>
+              <span>Step {STEPS.findIndex(s=>s.key===currentStep)+1} of {STEPS.length}</span>
+            </div>
+          </div>
+
+          <div className="steps">
+            {STEPS.map(s => (
+              <div key={s.key} 
+                className={`step ${s.key === currentStep ? "active" : ""} ${STEPS.findIndex(x=>x.key===currentStep) > STEPS.findIndex(x=>x.key===s.key) ? "completed" : ""}`}
+                onClick={() => setCurrentStep(s.key)}>
+                {s.label}
+              </div>
+            ))}
+          </div>
+
+          {msg && <p style={{color: msg.includes("Error") ? "var(--danger)" : "var(--accent)", marginBottom: 10}}>{msg}</p>}
+          
+          {renderStep()}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<OnboardingApp />);
+  </script>
+</body>
+</html>

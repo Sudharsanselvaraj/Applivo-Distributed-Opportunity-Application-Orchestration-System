@@ -12,6 +12,9 @@ from app.models.interview import (  # noqa: F401
     Interview, MockInterviewSession, Recruiter, RecruiterMessage,
     Notification, AgentTask, SkillGap, MarketSnapshot, LearningPlan, GeneratedProject,
 )
+from app.models.credential import CredentialVault, CredentialUseLog  # noqa: F401
+from app.models.consent import UserConsent, ConsentVersion  # noqa: F401
+from app.models.audit import AuditLog  # noqa: F401
 
 __all__ = [
     "Base",
@@ -22,4 +25,7 @@ __all__ = [
     "Interview", "MockInterviewSession", "Recruiter", "RecruiterMessage",
     "Notification", "AgentTask", "SkillGap", "MarketSnapshot",
     "LearningPlan", "GeneratedProject",
+    "CredentialVault", "CredentialUseLog",
+    "UserConsent", "ConsentVersion",
+    "AuditLog",
 ]

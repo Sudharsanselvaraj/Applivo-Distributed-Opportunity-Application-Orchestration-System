@@ -1,61 +1,32 @@
 """
-app/schemas/__init__.py + all schemas in one file (split into files in production)
-────────────────────────────────────────────────────────────────────────────────
-Pydantic v2 schemas for every API endpoint.
-Naming convention:
-  <Model>Base    — shared fields
-  <Model>Create  — request body for POST
-  <Model>Update  — request body for PATCH (all optional)
-  <Model>Out     — response schema (safe, no secrets)
+app/schemas/__init__.py
+All Pydantic schemas for every route and service.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
-
-from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  SHARED / PAGINATION
-# ═══════════════════════════════════════════════════════════════════════════
-
-class PaginationParams(BaseModel):
-    page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=20, ge=1, le=100)
-
-    @property
-    def offset(self) -> int:
-        return (self.page - 1) * self.page_size
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, EmailStr, Field
 
 
-class PaginatedResponse(BaseModel):
-    total: int
-    page: int
-    page_size: int
-    pages: int
-    items: List[Any]
+# ── Auth ──────────────────────────────────────────────────────────────────────
 
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=72)
+    full_name: str = Field(min_length=1, max_length=255)
 
-class MessageResponse(BaseModel):
-    message: str
-    success: bool = True
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  AUTH
-# ═══════════════════════════════════════════════════════════════════════════
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8)
+    password: str
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    expires_in: int  # seconds
+    expires_in: int
 
 
 class TokenData(BaseModel):
@@ -63,31 +34,24 @@ class TokenData(BaseModel):
     email: str
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  USER
-# ═══════════════════════════════════════════════════════════════════════════
-
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8)
-    full_name: str = Field(min_length=2, max_length=255)
-
-
 class UserOut(BaseModel):
     id: str
     email: str
     full_name: str
     is_active: bool
+    is_superuser: bool
+    last_login_at: Optional[datetime] = None
     created_at: datetime
-
     model_config = {"from_attributes": True}
 
+
+# ── Profile ───────────────────────────────────────────────────────────────────
 
 class UserSkillCreate(BaseModel):
     name: str = Field(max_length=100)
     category: Optional[str] = None
-    proficiency: Optional[Literal["beginner", "intermediate", "advanced", "expert"]] = None
-    years_experience: Optional[float] = Field(default=None, ge=0, le=50)
+    proficiency: Optional[str] = None
+    years_experience: Optional[float] = None
     is_primary: bool = False
 
 
@@ -98,39 +62,13 @@ class UserSkillOut(UserSkillCreate):
     model_config = {"from_attributes": True}
 
 
-class EducationItem(BaseModel):
-    degree: str
-    field: str
-    institution: str
-    year: int
-    gpa: Optional[float] = None
-
-
-class WorkExperienceItem(BaseModel):
-    title: str
-    company: str
-    start: str  # "YYYY-MM"
-    end: Optional[str] = None  # None = current
-    location: Optional[str] = None
-    bullets: List[str] = []
-
-
-class ProjectItem(BaseModel):
-    name: str
-    description: str
-    tech_stack: List[str] = []
-    github: Optional[str] = None
-    demo: Optional[str] = None
-    highlights: List[str] = []
-
-
 class UserProfileUpdate(BaseModel):
-    phone: Optional[str] = None
-    location: Optional[str] = None
-    linkedin_url: Optional[str] = None
-    github_url: Optional[str] = None
-    portfolio_url: Optional[str] = None
-    experience_level: Optional[Literal["entry", "mid", "senior"]] = None
+    phone: Optional[str] = Field(default=None, max_length=20)
+    location: Optional[str] = Field(default=None, max_length=255)
+    linkedin_url: Optional[str] = Field(default=None, max_length=500)
+    github_url: Optional[str] = Field(default=None, max_length=500)
+    portfolio_url: Optional[str] = Field(default=None, max_length=500)
+    experience_level: Optional[str] = None
     desired_roles: Optional[List[str]] = None
     desired_locations: Optional[List[str]] = None
     open_to_remote: Optional[bool] = None
@@ -141,10 +79,13 @@ class UserProfileUpdate(BaseModel):
     avoid_companies: Optional[List[str]] = None
     professional_summary: Optional[str] = None
     career_goals: Optional[str] = None
-    education: Optional[List[EducationItem]] = None
-    work_experience: Optional[List[WorkExperienceItem]] = None
-    projects: Optional[List[ProjectItem]] = None
+    unique_value_proposition: Optional[str] = None
+    education: Optional[List[dict]] = None
+    work_experience: Optional[List[dict]] = None
+    projects: Optional[List[dict]] = None
     certifications: Optional[List[dict]] = None
+    awards: Optional[List[dict]] = None
+    publications: Optional[List[dict]] = None
     auto_apply_enabled: Optional[bool] = None
     auto_apply_threshold: Optional[int] = Field(default=None, ge=0, le=100)
     auto_apply_daily_limit: Optional[int] = Field(default=None, ge=1, le=50)
@@ -155,62 +96,86 @@ class UserProfileUpdate(BaseModel):
     notify_via_telegram: Optional[bool] = None
     notify_via_email: Optional[bool] = None
     telegram_chat_id: Optional[str] = None
-    notification_email: Optional[EmailStr] = None
+    notification_email: Optional[str] = None
+    linkedin_session_cookie: Optional[str] = None
+    indeed_session_cookie: Optional[str] = None
 
 
-class UserProfileOut(UserProfileUpdate):
+class UserProfileOut(BaseModel):
     id: str
     user_id: str
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    experience_level: str
+    desired_roles: List[str]
+    desired_locations: List[str]
+    open_to_remote: bool
+    open_to_hybrid: bool
+    min_salary: int
+    preferred_company_size: List[str]
+    preferred_industries: List[str]
+    avoid_companies: List[str]
+    professional_summary: Optional[str] = None
+    career_goals: Optional[str] = None
+    unique_value_proposition: Optional[str] = None
+    education: List[dict]
+    work_experience: List[dict]
+    projects: List[dict]
+    certifications: List[dict]
+    awards: List[dict]
+    publications: List[dict]
+    auto_apply_enabled: bool
+    auto_apply_threshold: int
+    auto_apply_daily_limit: int
+    require_apply_approval: bool
+    notify_new_jobs: bool
+    notify_applications: bool
+    notify_interviews: bool
+    notify_via_telegram: bool
+    notify_via_email: bool
+    telegram_chat_id: Optional[str] = None
+    notification_email: Optional[str] = None
+    created_at: datetime
     updated_at: datetime
     model_config = {"from_attributes": True}
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  JOBS
-# ═══════════════════════════════════════════════════════════════════════════
-
-class JobFilter(BaseModel):
-    source: Optional[str] = None
-    job_type: Optional[str] = None
-    work_mode: Optional[str] = None
-    experience_level: Optional[str] = None
-    location: Optional[str] = None
-    min_match_score: Optional[float] = Field(default=None, ge=0, le=100)
-    company: Optional[str] = None
-    keyword: Optional[str] = None
-    status: Optional[str] = None
-    is_active: Optional[bool] = True
-    posted_after: Optional[datetime] = None
-    sort_by: Literal["match_score", "posted_at", "priority_score", "created_at"] = "match_score"
-    sort_order: Literal["asc", "desc"] = "desc"
-
+# ── Jobs ──────────────────────────────────────────────────────────────────────
 
 class JobAnalysisOut(BaseModel):
     id: str
-    job_id: str
-    required_skills: List[str]
-    preferred_skills: List[str]
-    tech_stack: List[str]
-    ats_keywords: List[str]
-    min_years_experience: Optional[float]
-    max_years_experience: Optional[float]
-    education_requirement: Optional[str]
-    key_responsibilities: List[str]
-    role_category: Optional[str]
-    match_score: Optional[float]
-    skill_match_score: Optional[float]
-    semantic_similarity_score: Optional[float]
-    matching_skills: List[str]
-    missing_skills: List[str]
-    skill_gap_count: int
-    estimated_applicants: Optional[int]
-    competition_level: Optional[str]
-    interview_probability: Optional[float]
-    job_difficulty: Optional[str]
-    priority_score: Optional[float]
-    ai_summary: Optional[str]
-    ai_recommendation: Optional[str]
-    model_used: Optional[str]
+    required_skills: List[str] = []
+    preferred_skills: List[str] = []
+    tech_stack: List[str] = []
+    ats_keywords: List[str] = []
+    min_years_experience: Optional[float] = None
+    max_years_experience: Optional[float] = None
+    education_requirement: Optional[str] = None
+    key_responsibilities: List[str] = []
+    role_category: Optional[str] = None
+    seniority_detected: Optional[str] = None
+    is_internship: bool = False
+    match_score: Optional[float] = None
+    skill_match_score: Optional[float] = None
+    experience_match_score: Optional[float] = None
+    semantic_similarity_score: Optional[float] = None
+    matching_skills: List[str] = []
+    missing_skills: List[str] = []
+    skill_gap_count: int = 0
+    competition_level: Optional[str] = None
+    interview_probability: Optional[float] = None
+    job_difficulty: Optional[str] = None
+    priority_score: Optional[float] = None
+    estimated_salary_min: Optional[int] = None
+    estimated_salary_max: Optional[int] = None
+    ai_summary: Optional[str] = None
+    ai_recommendation: Optional[str] = None
+    model_used: Optional[str] = None
+    tokens_used: Optional[int] = None
+    processing_time_ms: Optional[int] = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
@@ -221,109 +186,54 @@ class JobOut(BaseModel):
     source_url: str
     title: str
     company_name: str
-    company_logo_url: Optional[str]
-    description_clean: Optional[str]
-    location: Optional[str]
-    country: Optional[str]
-    work_mode: str
-    job_type: str
-    experience_level: str
-    salary_min: Optional[int]
-    salary_max: Optional[int]
-    salary_currency: Optional[str]
-    posted_at: Optional[datetime]
-    status: str
-    is_active: bool
-    applicant_count: Optional[int]
-    easy_apply: bool
+    company_logo_url: Optional[str] = None
+    description_clean: Optional[str] = None
+    location: Optional[str] = None
+    work_mode: str = "unknown"
+    job_type: str = "full_time"
+    experience_level: str = "any"
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+    salary_currency: Optional[str] = None
+    posted_at: Optional[datetime] = None
     scraped_at: datetime
-    analysis: Optional[JobAnalysisOut]
+    status: str = "new"
+    is_active: bool = True
+    applicant_count: Optional[int] = None
+    easy_apply: bool = False
+    analysis: Optional[JobAnalysisOut] = None
+    created_at: datetime
     model_config = {"from_attributes": True}
 
 
 class JobCreate(BaseModel):
-    """For manual job entry."""
-    title: str
-    company_name: str
-    source_url: str
-    description_raw: str
-    location: Optional[str] = None
+    source_url: str = Field(max_length=2000)
+    title: str = Field(max_length=500)
+    company_name: str = Field(max_length=255)
+    description_raw: Optional[str] = None
+    location: Optional[str] = Field(default=None, max_length=255)
     job_type: str = "full_time"
     work_mode: str = "unknown"
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  RESUME
-# ═══════════════════════════════════════════════════════════════════════════
-
-class ResumeCreate(BaseModel):
-    name: str = Field(max_length=255)
-    resume_type: Literal["base", "tailored", "role_variant"] = "base"
-    role_category: Optional[str] = None
-    content_json: Optional[dict] = None
+class JobFilter(BaseModel):
+    source: Optional[str] = None
+    job_type: Optional[str] = None
+    work_mode: Optional[str] = None
+    min_match_score: Optional[float] = None
+    keyword: Optional[str] = None
+    status: Optional[str] = None
 
 
-class ResumeGenerateRequest(BaseModel):
-    job_id: str
-    tone: Literal["professional", "technical", "concise"] = "professional"
-    base_resume_id: Optional[str] = None
-    # If None, use the default base resume
-
-
-class ResumeOut(BaseModel):
-    id: str
-    user_id: str
-    name: str
-    version: int
-    resume_type: str
-    role_category: Optional[str]
-    file_path: Optional[str]
-    ats_score: Optional[float]
-    times_used: int
-    response_count: int
-    response_rate: Optional[float]
-    is_active: bool
-    is_default: bool
-    keywords_injected: List[str]
-    created_at: datetime
-    model_config = {"from_attributes": True}
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  COVER LETTER
-# ═══════════════════════════════════════════════════════════════════════════
-
-class CoverLetterGenerateRequest(BaseModel):
-    job_id: str
-    tone: Literal["professional", "technical", "enthusiastic", "concise"] = "professional"
-    additional_context: Optional[str] = None
-    # Extra instructions for the AI
-
-
-class CoverLetterOut(BaseModel):
-    id: str
-    job_id: Optional[str]
-    content: str
-    tone: str
-    target_company: Optional[str]
-    target_role: Optional[str]
-    highlighted_skills: List[str]
-    word_count: Optional[int]
-    created_at: datetime
-    model_config = {"from_attributes": True}
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  APPLICATIONS
-# ═══════════════════════════════════════════════════════════════════════════
+# ── Applications ──────────────────────────────────────────────────────────────
 
 class ApplicationCreate(BaseModel):
     job_id: str
     resume_id: Optional[str] = None
     cover_letter_id: Optional[str] = None
-    method: Literal["auto_bot", "easy_apply", "manual", "email"] = "auto_bot"
+    method: str = "auto_bot"
     notes: Optional[str] = None
 
 
@@ -340,181 +250,232 @@ class ApplicationOut(BaseModel):
     id: str
     user_id: str
     job_id: str
-    resume_id: Optional[str]
-    cover_letter_id: Optional[str]
+    resume_id: Optional[str] = None
     status: str
     method: str
-    applied_at: Optional[datetime]
-    match_score_at_apply: Optional[float]
-    job_title_snapshot: Optional[str]
-    company_snapshot: Optional[str]
-    recruiter_name: Optional[str]
-    recruiter_email: Optional[str]
-    follow_up_status: str
-    follow_up_date: Optional[datetime]
-    interview_date: Optional[datetime]
-    interview_type: Optional[str]
-    offer_salary: Optional[int]
-    notes: Optional[str]
-    is_starred: bool
-    retry_count: int
+    applied_at: Optional[datetime] = None
+    viewed_at: Optional[datetime] = None
+    shortlisted_at: Optional[datetime] = None
+    offer_received_at: Optional[datetime] = None
+    rejected_at: Optional[datetime] = None
+    match_score_at_apply: Optional[float] = None
+    job_title_snapshot: Optional[str] = None
+    company_snapshot: Optional[str] = None
+    recruiter_name: Optional[str] = None
+    recruiter_email: Optional[str] = None
+    follow_up_status: str = "none"
+    follow_up_count: int = 0
+    interview_date: Optional[datetime] = None
+    interview_type: Optional[str] = None
+    interview_notes: Optional[str] = None
+    offer_salary: Optional[int] = None
+    notes: Optional[str] = None
+    is_starred: bool = False
+    bot_error: Optional[str] = None
+    retry_count: int = 0
     created_at: datetime
-    job: Optional[JobOut] = None
+    updated_at: datetime
     model_config = {"from_attributes": True}
 
 
 class ApplicationStats(BaseModel):
-    total_sent: int
-    pending_approval: int
-    applied: int
-    viewed: int
-    shortlisted: int
-    interviews: int
-    offers: int
-    rejected: int
-    response_rate: float  # (viewed + shortlisted + interviews + offers) / applied
-    interview_rate: float
-    offer_rate: float
+    total_sent: int = 0
+    pending_approval: int = 0
+    applied: int = 0
+    viewed: int = 0
+    shortlisted: int = 0
+    interviews: int = 0
+    offers: int = 0
+    rejected: int = 0
+    response_rate: float = 0.0
+    interview_rate: float = 0.0
+    offer_rate: float = 0.0
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  NOTIFICATIONS
-# ═══════════════════════════════════════════════════════════════════════════
+# ── Resumes ───────────────────────────────────────────────────────────────────
 
-class NotificationOut(BaseModel):
+class ResumeGenerateRequest(BaseModel):
+    job_id: str
+    base_resume_id: Optional[str] = None
+
+
+class ResumeOut(BaseModel):
     id: str
-    channel: str
-    status: str
-    title: str
-    body: str
-    event_type: Optional[str]
-    sent_at: Optional[datetime]
-    read_at: Optional[datetime]
+    user_id: str
+    name: str
+    version: int = 1
+    resume_type: str = "tailored"
+    role_category: Optional[str] = None
+    ats_score: Optional[float] = None
+    keyword_coverage: Optional[float] = None
+    times_used: int = 0
+    response_count: int = 0
+    response_rate: Optional[float] = None
+    keywords_injected: List[str] = []
+    is_active: bool = True
+    is_default: bool = False
+    file_path: Optional[str] = None
+    target_job_id: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class CoverLetterGenerateRequest(BaseModel):
+    job_id: str
+    tone: str = "professional"
+    additional_context: Optional[str] = None
+
+
+class CoverLetterOut(BaseModel):
+    id: str
+    user_id: str
+    job_id: Optional[str] = None
+    application_id: Optional[str] = None
+    content: str
+    tone: str = "professional"
+    target_company: Optional[str] = None
+    target_role: Optional[str] = None
+    highlighted_skills: List[str] = []
+    word_count: Optional[int] = None
+    file_path: Optional[str] = None
+    model_used: Optional[str] = None
+    tokens_used: Optional[int] = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  AGENT
-# ═══════════════════════════════════════════════════════════════════════════
+# ── Interviews ────────────────────────────────────────────────────────────────
+
+class InterviewOut(BaseModel):
+    id: str
+    application_id: str
+    user_id: str
+    interview_type: str
+    scheduled_at: Optional[datetime] = None
+    duration_minutes: Optional[int] = None
+    platform: Optional[str] = None
+    meeting_link: Optional[str] = None
+    study_topics: List[str] = []
+    completed_at: Optional[datetime] = None
+    outcome: Optional[str] = None
+    user_notes: Optional[str] = None
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+# ── Agent / Tasks ─────────────────────────────────────────────────────────────
 
 class AgentTaskOut(BaseModel):
     id: str
     task_type: str
     status: str
-    celery_task_id: Optional[str]
-    payload: Optional[dict]
-    result: Optional[dict]
-    error: Optional[str]
-    scheduled_at: Optional[datetime]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    duration_ms: Optional[int]
-    retry_count: int
-    triggered_by: str
+    result: Optional[Any] = None
+    error: Optional[str] = None
     created_at: datetime
+    completed_at: Optional[datetime] = None
     model_config = {"from_attributes": True}
 
 
 class AgentStatusResponse(BaseModel):
     is_running: bool
-    current_task: Optional[str]
-    last_run_at: Optional[datetime]
-    next_run_at: Optional[datetime]
-    tasks_today: int
-    tasks_succeeded: int
-    tasks_failed: int
-    jobs_found_today: int
-    applications_today: int
+    current_task: Optional[str] = None
+    last_run: Optional[datetime] = None
+    jobs_found_today: int = 0
+    applications_today: int = 0
 
 
 class ManualAgentRunRequest(BaseModel):
-    task_type: str
+    task_type: str  # Required - which task to run
     payload: Optional[dict] = None
+    scrape_linkedin: bool = True
+    scrape_indeed: bool = True
+    scrape_internshala: bool = True
+    scrape_wellfound: bool = True
+    analyze_jobs: bool = True
+    max_jobs: Optional[int] = None
+
+    model_config = {"extra": "ignore"}
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  SKILL GAP & MARKET
-# ═══════════════════════════════════════════════════════════════════════════
-
-class SkillGapOut(BaseModel):
-    id: str
-    skill_name: str
-    category: Optional[str]
-    demand_count: int
-    demand_percentage: Optional[float]
-    priority: str
-    user_has_skill: bool
-    learning_plan_generated: bool
-    resolved: bool
-    model_config = {"from_attributes": True}
+class AgentCycleResponse(BaseModel):
+    task_id: str
+    status: str
+    message: str
 
 
-class MarketInsightResponse(BaseModel):
-    snapshot_date: datetime
-    total_jobs_analyzed: int
-    top_skills: List[dict]
-    top_companies_hiring: List[dict]
-    emerging_roles: List[str]
-    salary_data: Optional[dict]
-    by_work_mode: Optional[dict]
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  INTERVIEWS
-# ═══════════════════════════════════════════════════════════════════════════
-
-class InterviewOut(BaseModel):
-    id: str
-    application_id: str
-    interview_type: str
-    scheduled_at: Optional[datetime]
-    duration_minutes: Optional[int]
-    platform: Optional[str]
-    meeting_link: Optional[str]
-    technical_questions: List[dict]
-    behavioral_questions: List[dict]
-    study_topics: List[str]
-    company_report: Optional[dict]
-    completed_at: Optional[datetime]
-    outcome: Optional[str]
-    model_config = {"from_attributes": True}
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  CHAT / AI ASSISTANT
-# ═══════════════════════════════════════════════════════════════════════════
+# ── Chat ──────────────────────────────────────────────────────────────────────
 
 class ChatMessage(BaseModel):
-    role: Literal["user", "assistant", "system"]
+    role: str
     content: str
 
 
 class ChatRequest(BaseModel):
-    message: str
-    conversation_history: List[ChatMessage] = []
-
+    message: str = Field(min_length=1, max_length=4000)
+    history: List[ChatMessage] = Field(default_factory=list)
+    conversation_history: List[ChatMessage] = Field(default_factory=list)
 
 class ChatResponse(BaseModel):
     response: str
-    actions_taken: List[str] = []
-    # e.g. ["Searched 8 jobs", "Queued 3 applications"]
-    data: Optional[dict] = None
+    actions_taken: List[str] = Field(default_factory=list)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  DASHBOARD / ANALYTICS
-# ═══════════════════════════════════════════════════════════════════════════
+# ── Shared ────────────────────────────────────────────────────────────────────
+
+class PaginatedResponse(BaseModel):
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+    pages: int = 0
+    items: List[Any] = []
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+# ── Dashboard & Market ────────────────────────────────────────────────────────
 
 class DashboardStats(BaseModel):
-    # Applications
-    applications: ApplicationStats
-    # Jobs
-    total_jobs_in_db: int
-    new_jobs_today: int
-    top_match_score: Optional[float]
-    # Agent
-    agent: AgentStatusResponse
-    # Recent activity
-    recent_applications: List[ApplicationOut]
-    top_jobs: List[JobOut]
+    total_jobs: int = 0
+    jobs_today: int = 0
+    high_match_jobs: int = 0
+    total_applications: int = 0
+    applications_today: int = 0
+    pending_approval: int = 0
+    interviews_scheduled: int = 0
+    offers_received: int = 0
+    response_rate: float = 0.0
+    top_skill_gaps: List[dict] = []
+    recent_activity: List[dict] = []
+
+
+class MarketInsightResponse(BaseModel):
+    trending_skills: List[str] = []
+    avg_salary_range: Optional[str] = None
+    top_hiring_companies: List[str] = []
+    job_market_summary: Optional[str] = None
+    insights_generated_at: Optional[datetime] = None
+
+
+class SkillGapOut(BaseModel):
+    id: str
+    skill_name: str
+    demand_count: int = 0
+    priority: Optional[str] = None
+    learning_resources: Optional[List[str]] = None
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+class ManualAgentRunRequest(BaseModel):
+    task_type: str = ""  # Required - which task to run
+    payload: Optional[dict] = None
+    scrape_linkedin: bool = True
+    scrape_indeed: bool = True
+    scrape_internshala: bool = True
+    scrape_wellfound: bool = True
+    analyze_jobs: bool = True
+    max_jobs: Optional[int] = None
+
+    model_config = {"extra": "ignore"}

@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import (
+    ForeignKey,
     JSON,
     Boolean,
     DateTime,
@@ -45,8 +46,8 @@ class Interview(Base, UUIDMixin, TimestampMixin):
     """Scheduled interview with auto-generated prep material."""
     __tablename__ = "interviews"
 
-    application_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    application_id: Mapped[str] = mapped_column(String(36), ForeignKey("applications.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
 
     interview_type: Mapped[str] = mapped_column(Enum(InterviewType), nullable=False)
     scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -84,8 +85,8 @@ class MockInterviewSession(Base, UUIDMixin, TimestampMixin):
     """AI mock interview session (Module 19)."""
     __tablename__ = "mock_interview_sessions"
 
-    interview_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    interview_id: Mapped[str] = mapped_column(ForeignKey("interviews.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
 
     transcript: Mapped[List[dict]] = mapped_column(JSON, default=list)
     # [{"role": "interviewer"|"user", "content": "...", "timestamp": "..."}]
@@ -116,7 +117,7 @@ class Recruiter(Base, UUIDMixin, TimestampMixin):
     """Recruiter / hiring manager contact."""
     __tablename__ = "recruiters"
 
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     linkedin_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -138,7 +139,7 @@ class RecruiterMessage(Base, UUIDMixin, TimestampMixin):
     """Individual message in a recruiter conversation thread."""
     __tablename__ = "recruiter_messages"
 
-    recruiter_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    recruiter_id: Mapped[str] = mapped_column(ForeignKey("recruiters.id"), nullable=False, index=True)
     direction: Mapped[str] = mapped_column(String(10), nullable=False)
     # "sent" | "received"
     channel: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -170,7 +171,7 @@ class Notification(Base, UUIDMixin, TimestampMixin):
     """Log of every notification sent to the user."""
     __tablename__ = "notifications"
 
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     channel: Mapped[str] = mapped_column(Enum(NotificationChannel), nullable=False)
     status: Mapped[str] = mapped_column(
         Enum(NotificationStatus), default=NotificationStatus.PENDING, nullable=False, index=True
@@ -274,7 +275,7 @@ class SkillGap(Base, UUIDMixin, TimestampMixin):
     """
     __tablename__ = "skill_gaps"
 
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     skill_name: Mapped[str] = mapped_column(String(100), nullable=False)
     category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
@@ -328,7 +329,7 @@ class LearningPlan(Base, UUIDMixin, TimestampMixin):
     """AI-generated learning roadmap to address skill gaps."""
     __tablename__ = "learning_plans"
 
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     target_role: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     total_weeks: Mapped[int] = mapped_column(Integer, default=4)
@@ -345,7 +346,7 @@ class GeneratedProject(Base, UUIDMixin, TimestampMixin):
     """AI-generated project idea to address a skill gap (Module 12)."""
     __tablename__ = "generated_projects"
 
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     skill_gap_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)

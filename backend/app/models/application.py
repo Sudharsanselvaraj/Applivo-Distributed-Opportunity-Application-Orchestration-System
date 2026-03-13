@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import (
+    ForeignKey,
     JSON,
     Boolean,
     DateTime,
@@ -69,9 +70,9 @@ class Application(Base, UUIDMixin, TimestampMixin):
     """
     __tablename__ = "applications"
 
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    job_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    resume_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    job_id: Mapped[str] = mapped_column(String(36), ForeignKey("jobs.id"), nullable=False, index=True)
+    resume_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("resumes.id"), nullable=True, index=True)
     cover_letter_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     # ── Status ────────────────────────────────────────────────
@@ -160,7 +161,7 @@ class ApplicationEvent(Base, UUIDMixin, TimestampMixin):
     """
     __tablename__ = "application_events"
 
-    application_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    application_id: Mapped[str] = mapped_column(String(36), ForeignKey("applications.id"), nullable=False, index=True)
 
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     # e.g. "status_changed", "follow_up_sent", "bot_started", "captcha_detected"

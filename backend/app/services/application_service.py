@@ -38,7 +38,11 @@ class ApplicationService:
                 select(UserProfile).where(UserProfile.user_id == user.id)
             )).scalar_one_or_none()
 
-            if not profile or not profile.auto_apply_enabled:
+            # Check if auto-apply is enabled - either via profile or global config
+            is_auto_apply_enabled = (
+                (profile and profile.auto_apply_enabled) or settings.AUTO_APPLY_ENABLED
+            )
+            if not is_auto_apply_enabled:
                 return {"queued": 0, "reason": "Auto-apply disabled"}
 
             # Check daily limit
@@ -51,14 +55,27 @@ class ApplicationService:
                 )
             )).scalar() or 0
 
-            remaining = profile.auto_apply_daily_limit - apps_today
+            # Use profile settings with global settings as fallback
+            daily_limit = (
+                profile.auto_apply_daily_limit 
+                if profile and profile.auto_apply_daily_limit 
+                else settings.AUTO_APPLY_DAILY_LIMIT
+            )
+            remaining = daily_limit - apps_today
             if remaining <= 0:
-                return {"queued": 0, "reason": f"Daily limit of {profile.auto_apply_daily_limit} reached"}
+                return {"queued": 0, "reason": f"Daily limit of {daily_limit} reached"}
 
             # Find already-applied job IDs to exclude
             applied_job_ids = (await db.execute(
                 select(Application.job_id).where(Application.user_id == user.id)
             )).scalars().all()
+
+            # Use profile settings with global settings as fallback
+            threshold = (
+                profile.auto_apply_threshold 
+                if profile and profile.auto_apply_threshold 
+                else settings.AUTO_APPLY_MATCH_THRESHOLD
+            )
 
             # Find top qualifying jobs
             result = await db.execute(
@@ -67,7 +84,7 @@ class ApplicationService:
                 .where(
                     Job.is_active == True,
                     Job.status == JobStatus.ANALYZED,
-                    JobAnalysis.match_score >= profile.auto_apply_threshold,
+                    JobAnalysis.match_score >= threshold,
                     ~Job.id.in_(applied_job_ids),
                 )
                 .order_by(desc(JobAnalysis.priority_score))
